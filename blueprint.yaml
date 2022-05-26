@@ -1,0 +1,49 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+imports:
+  - https://cloudify.co/spec/cloudify/6.3.0/types.yaml
+  - plugin:cloudify-utilities-plugin?version= >=1.22.1
+  - plugin:cloudify-terraform-plugin
+
+inputs:
+
+  config_url:
+    type: string
+    display_label: Config URL
+    description: URL used to download config from
+    default: https://gist.githubusercontent.com/acritelli/fdc6e2ec310dd482b4a5339e680efb37/raw/271bb8e8ca1897168d3aa01cb6b331acace5f21e/dev.yaml
+
+node_templates:
+
+  terraform:
+    type: cloudify.nodes.terraform
+    properties:
+      resource_config:
+        installation_source: https://releases.hashicorp.com/terraform/1.1.4/terraform_1.1.4_linux_amd64.zip
+  
+  terraform_module:
+    type: cloudify.nodes.terraform.Module
+    properties:
+      resource_config:
+        source:
+          location: module.zip
+    relationships:
+      - type: cloudify.terraform.relationships.run_on_host
+        target: terraform
+    interfaces:
+      cloudify.interfaces.lifecycle:
+        create:
+          implementation: tf.cloudify_tf.tasks.setup_linters
+        configure:
+          implementation: scripts/download_config.sh
+          inputs:
+            process:
+              args:
+                - { get_input: config_url }
+          executor: central_deployment_agent
+
+outputs:
+
+  config:
+    description: The value of the decoded config
+    value: { get_attribute: [ terraform_module, outputs, config, value ] }
